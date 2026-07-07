@@ -1,0 +1,4 @@
+This is a sample text file for local testing of the MapReduce framework.
+The quick brown fox jumps over the lazy dog.
+The dog barked at the fox.
+Fox and dog are both animals.

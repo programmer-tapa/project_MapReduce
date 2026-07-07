@@ -1,0 +1,23 @@
+# Binaries
+bin/
+
+# Intermediate MapReduce files
+mr-*-*
+mr-out-*
+
+# Go
+*.exe
+*.test
+*.prof
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Protobuf generated (regenerate with `make proto`)
+# internal/transport/pb/*.pb.go

@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package mapreduce;
+
+option go_package = "mapreduce/internal/transport/pb";
+
+// MapReduceService defines the RPC contract between workers and the coordinator.
+service MapReduceService {
+  // GetTask is called by a worker to request the next available task.
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+
+  // ReportTask is called by a worker to report task completion or failure.
+  rpc ReportTask(ReportTaskRequest) returns (ReportTaskResponse);
+
+  // Heartbeat is an optional keep-alive signal from workers.
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+enum TaskType {
+  MAP_TASK    = 0;
+  REDUCE_TASK = 1;
+  WAIT_TASK   = 2;
+  EXIT_TASK   = 3;
+}
+
+message GetTaskRequest {
+  string worker_id = 1;
+}
+
+message GetTaskResponse {
+  TaskType task_type = 1;
+  int32 task_id      = 2;
+  string filename    = 3; // Input file (Map tasks only)
+  int32 n_reduce     = 4; // Total reduce partitions
+  int32 n_maps       = 5; // Total map tasks (needed by reduce workers)
+}
+
+message ReportTaskRequest {
+  string worker_id   = 1;
+  TaskType task_type = 2;
+  int32 task_id      = 3;
+  bool success       = 4;
+  string error_msg   = 5; // Populated on failure
+}
+
+message ReportTaskResponse {}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+}

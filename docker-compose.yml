@@ -1,0 +1,67 @@
+services:
+  # ─── S3-compatible object storage (shared filesystem replacement) ────────────
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"   # S3 API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"   # MinIO Console UI
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      retries: 5
+
+  # ─── Coordinator (single instance) ──────────────────────────────────────────
+  coordinator:
+    build:
+      context: ./MapReduce
+      dockerfile: deployments/docker/Dockerfile.coordinator
+    command: ["--addr", ":9090", "--storage", "${STORAGE_TYPE:-s3}", "--s3-endpoint", "minio:9000", "--s3-bucket", "${MINIO_BUCKET:-mapreduce}", "--s3-access-key", "${MINIO_ROOT_USER:-minioadmin}", "--s3-secret-key", "${MINIO_ROOT_PASSWORD:-minioadmin}", "/app/testdata/sample-input.txt"]
+    ports:
+      - "${COORDINATOR_PORT:-9090}:9090"   # gRPC
+      - "${COORDINATOR_METRICS_PORT:-9091}:9091"   # Prometheus metrics
+    depends_on:
+      minio:
+        condition: service_healthy
+
+  # ─── Workers (scalable replicas) ────────────────────────────────────────────
+  worker:
+    build:
+      context: ./MapReduce
+      dockerfile: deployments/docker/Dockerfile.worker
+    command: ["--coordinator-addr", "coordinator:9090", "--app", "/app/examples/wordcount.py", "--storage", "${STORAGE_TYPE:-s3}", "--s3-endpoint", "minio:9000", "--s3-bucket", "${MINIO_BUCKET:-mapreduce}", "--s3-access-key", "${MINIO_ROOT_USER:-minioadmin}", "--s3-secret-key", "${MINIO_ROOT_PASSWORD:-minioadmin}", "--metrics-addr", ":9092"]
+    deploy:
+      replicas: ${WORKER_REPLICAS:-3}
+    depends_on:
+      - coordinator
+
+  # ─── Observability: Prometheus ──────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "${PROMETHEUS_PORT:-9092}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - coordinator
+
+  # ─── Observability: Grafana ─────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  minio-data:
+  grafana-data:
